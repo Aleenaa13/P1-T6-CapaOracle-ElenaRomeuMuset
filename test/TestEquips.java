@@ -1,3 +1,4 @@
+import capa.CPOracle;
 import p1.t6.model.romeumusetelena.Equip;
 import p1.t6.model.romeumusetelena.TipusEquip;
 
