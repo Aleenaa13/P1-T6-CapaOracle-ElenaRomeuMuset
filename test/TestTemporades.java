@@ -23,7 +23,7 @@ public class TestTemporades {
         //provarAfegirTemporada(cp);
         //provarObtenirTemporada(cp);
         //provarObtenirTotesTemporades(cp);
-        //provarEliminarTemporada(cp);
+        provarEliminarTemporada(cp);
 
         // Tancament de la capa
         try {

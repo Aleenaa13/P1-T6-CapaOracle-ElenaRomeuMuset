@@ -33,6 +33,10 @@ public class CPOracle implements IPersistencia {
     private PreparedStatement psModificarEquip;
     private PreparedStatement psEliminarEquip;
     private PreparedStatement psAfegirJugador;
+    private PreparedStatement psBuscarNomJugador;
+    private PreparedStatement psBuscarPerNIF;
+    private PreparedStatement psBuscarPerDataNaix;
+    private PreparedStatement psOrdenarPerCognom;
     private PreparedStatement psObtenirJugador;
     private PreparedStatement psObtenirTotsJugadors;
     private PreparedStatement psModificarJugador;
@@ -102,7 +106,7 @@ public class CPOracle implements IPersistencia {
 
     // Mètode per afegir un nou Equip
     @Override
-    public void afegirEquip(Equip equip) throws GestorBDEsportsException {
+    public boolean afegirEquip(Equip equip) throws GestorBDEsportsException {
         if (psAfegirEquip == null) {
             try {
                 // Preparar la sentència per inserir un equip
@@ -118,7 +122,8 @@ public class CPOracle implements IPersistencia {
             psAfegirEquip.setInt(3, equip.getAnyTemporada());
             psAfegirEquip.setInt(4, equip.getIdCategoria());
 
-            psAfegirEquip.executeUpdate();
+            int rowsAffected = psAfegirEquip.executeUpdate();
+            return rowsAffected > 0; // Si es va afegir correctament, es retornarà true
         } catch (SQLException ex) {
             throw new GestorBDEsportsException("Error en afegir l'equip", ex);
         }
@@ -271,6 +276,208 @@ public class CPOracle implements IPersistencia {
             throw new GestorBDEsportsException("Error en afegir el jugador", ex);
         }
     }
+    
+    // Mètode per buscar jugadors per NIF
+    @Override
+    public List<Jugador> buscarPerNIFJugador(String nif) throws GestorBDEsportsException {
+        if (psBuscarPerNIF == null) {
+            try {
+                psBuscarPerNIF = conn.prepareStatement(
+                    "SELECT id, nom, cognoms, direccio, codipostal, poblacio, foto, anyfirevisiomedica, iban, idlegal, datanaix, sexe " +
+                    "FROM jugador WHERE LOWER(id_legal) LIKE LOWER(?)"
+                );
+            } catch (SQLException ex) {
+                throw new GestorBDEsportsException("Error en preparar la sentència psBuscarPerNIF", ex);
+            }
+        }
+
+        try {
+            psBuscarPerNIF.setString(1, "%" + nif + "%"); // Afegir els percentatges per buscar per coincidència parcial
+            ResultSet rs = psBuscarPerNIF.executeQuery();
+
+            List<Jugador> jugadors = new ArrayList<>();
+            while (rs.next()) {
+                // Recuperar els valors de la base de dades
+                int id = rs.getInt("id");
+                String nom = rs.getString("nom");
+                String cognoms = rs.getString("cognoms");
+                String direccio = rs.getString("direccio");
+                String codiPostal = rs.getString("codipostal");
+                String poblacio = rs.getString("poblacio");
+                String foto = rs.getString("foto");
+                int anyFiRevisioMedica = rs.getInt("anyfirevisiomedica");
+                String IBAN = rs.getString("iban");
+                String idLegal = rs.getString("idlegal");
+                Date dataNaix = rs.getDate("datanaix");
+                char sexe = rs.getString("sexe").charAt(0);
+
+                // Crear l'objecte Adreca
+                Adreca adreca = new Adreca(direccio, codiPostal, poblacio);
+
+                // Crear l'objecte Jugador
+                Jugador jugador = new Jugador(id, nom, cognoms, adreca, foto, anyFiRevisioMedica, IBAN, idLegal, dataNaix, sexe);
+
+                // Afegir el jugador a la llista
+                jugadors.add(jugador);
+            }
+
+            return jugadors;
+        } catch (SQLException ex) {
+            throw new GestorBDEsportsException("Error en buscar jugadors pel NIF", ex);
+        }
+    }
+    
+    @Override
+    public List<Jugador> buscarPerDataNaixJugador(Date dataNaix) throws GestorBDEsportsException {
+        if (psBuscarPerDataNaix == null) {
+            try {
+                psBuscarPerDataNaix = conn.prepareStatement(
+                    "SELECT id, nom, cognoms, direccio, codipostal, poblacio, foto, anyfirevisiomedica, iban, idlegal, datanaix, sexe " +
+                    "FROM jugador WHERE datanaix = ?"
+                );
+            } catch (SQLException ex) {
+                throw new GestorBDEsportsException("Error en preparar la sentència psBuscarPerDataNaix", ex);
+            }
+        }
+
+        try {
+            psBuscarPerDataNaix.setDate(1, (java.sql.Date) dataNaix); // Establir la data de naixement
+            ResultSet rs = psBuscarPerDataNaix.executeQuery();
+
+            List<Jugador> jugadors = new ArrayList<>();
+            while (rs.next()) {
+                // Recuperar els valors de la base de dades
+                int id = rs.getInt("id");
+                String nom = rs.getString("nom");
+                String cognoms = rs.getString("cognoms");
+                String direccio = rs.getString("direccio");
+                String codiPostal = rs.getString("codipostal");
+                String poblacio = rs.getString("poblacio");
+                String foto = rs.getString("foto");
+                int anyFiRevisioMedica = rs.getInt("anyfirevisiomedica");
+                String IBAN = rs.getString("iban");
+                String idLegal = rs.getString("idlegal");
+                Date dataNaixRecuperada = rs.getDate("datanaix");
+                char sexe = rs.getString("sexe").charAt(0);
+
+                // Crear l'objecte Adreca
+                Adreca adreca = new Adreca(direccio, codiPostal, poblacio);
+
+                // Crear l'objecte Jugador
+                Jugador jugador = new Jugador(id, nom, cognoms, adreca, foto, anyFiRevisioMedica, IBAN, idLegal, dataNaixRecuperada, sexe);
+
+                // Afegir el jugador a la llista
+                jugadors.add(jugador);
+            }
+
+            return jugadors;
+        } catch (SQLException ex) {
+            throw new GestorBDEsportsException("Error en buscar jugadors per data de naixement", ex);
+        }
+    }
+    
+    @Override
+    public List<Jugador> buscarJugadorsOrdenatsPerCognom(boolean ordenarPerCognom) throws GestorBDEsportsException {
+        String consulta = "SELECT id, nom, cognoms, direccio, codipostal, poblacio, foto, anyfirevisiomedica, iban, idlegal, datanaix, sexe "
+                        + "FROM jugador";
+
+        // Si ordenarPerCognom és true, afegim l'ORDER BY
+        if (ordenarPerCognom) {
+            consulta += " ORDER BY cognoms";
+        }
+
+        try {
+            // Si el PreparedStatement no ha estat inicialitzat, l'inicialitzem
+            if (psOrdenarPerCognom == null) {
+                psOrdenarPerCognom = conn.prepareStatement(consulta);
+            }
+
+            ResultSet rs = psOrdenarPerCognom.executeQuery();
+
+            List<Jugador> jugadors = new ArrayList<>();
+            while (rs.next()) {
+                // Recuperem els valors de la base de dades
+                int id = rs.getInt("id");
+                String nom = rs.getString("nom");
+                String cognoms = rs.getString("cognoms");
+                String direccio = rs.getString("direccio");
+                String codiPostal = rs.getString("codipostal");
+                String poblacio = rs.getString("poblacio");
+                String foto = rs.getString("foto");
+                int anyFiRevisioMedica = rs.getInt("anyfirevisiomedica");
+                String IBAN = rs.getString("iban");
+                String idLegal = rs.getString("idlegal");
+                Date dataNaixRecuperada = rs.getDate("datanaix");
+                char sexe = rs.getString("sexe").charAt(0);
+
+                // Crear l'objecte Adreca
+                Adreca adreca = new Adreca(direccio, codiPostal, poblacio);
+
+                // Crear l'objecte Jugador
+                Jugador jugador = new Jugador(id, nom, cognoms, adreca, foto, anyFiRevisioMedica, IBAN, idLegal, dataNaixRecuperada, sexe);
+
+                // Afegir el jugador a la llista
+                jugadors.add(jugador);
+            }
+
+            return jugadors;
+        } catch (SQLException ex) {
+            throw new GestorBDEsportsException("Error en buscar jugadors ordenats per cognom", ex);
+        }
+    }
+    
+
+    // Mètode per buscar jugadors pel nom
+    @Override
+    public List<Jugador> buscarNomJugador(String nom) throws GestorBDEsportsException {
+        if (psBuscarNomJugador == null) {
+            try {
+                // Preparar la sentència SQL per buscar jugadors pel nom
+                psBuscarNomJugador = conn.prepareStatement(
+                    "SELECT id, nom, cognoms, direccio, codipostal, poblacio, foto, anyfirevisiomedica, iban, idlegal, datanaix, sexe " +
+                    "FROM jugador WHERE LOWER(nom) LIKE LOWER(?)"
+                );
+            } catch (SQLException ex) {
+                throw new GestorBDEsportsException("Error en preparar la sentència psBuscarNomJugador", ex);
+            }
+        }
+
+        try {
+            psBuscarNomJugador.setString(1, "%" + nom + "%"); // Afegir els percentatges per buscar per coincidència parcial
+            ResultSet rs = psBuscarNomJugador.executeQuery();
+
+            List<Jugador> jugadors = new ArrayList<>();
+            while (rs.next()) {
+                // Recuperar els valors de la base de dades
+                int id = rs.getInt("id");
+                String nomJugador = rs.getString("nom");
+                String cognoms = rs.getString("cognoms");
+                String direccio = rs.getString("direccio");
+                String codiPostal = rs.getString("codipostal");
+                String poblacio = rs.getString("poblacio");
+                String foto = rs.getString("foto");
+                int anyFiRevisioMedica = rs.getInt("anyfirevisiomedica");
+                String IBAN = rs.getString("iban");
+                String idLegal = rs.getString("idlegal");
+                Date dataNaix = rs.getDate("datanaix");
+                char sexe = rs.getString("sexe").charAt(0);
+
+                // Crear l'objecte Adreca
+                Adreca adreca = new Adreca(direccio, codiPostal, poblacio);
+
+                // Crear l'objecte Jugador
+                Jugador jugador = new Jugador(id, nomJugador, cognoms, adreca, foto, anyFiRevisioMedica, IBAN, idLegal, dataNaix, sexe);
+
+                // Afegir el jugador a la llista
+                jugadors.add(jugador);
+            }
+            return jugadors;
+        } catch (SQLException ex) {
+            throw new GestorBDEsportsException("Error en buscar jugadors pel nom", ex);
+        }
+    }
+
+
 
     // Mètode per obtenir un jugador
     @Override
@@ -676,7 +883,7 @@ public class CPOracle implements IPersistencia {
 
     // Mètode per afegir una temporada
     @Override
-    public void afegirTemporada(Temporada temporada) throws GestorBDEsportsException {
+    public boolean afegirTemporada(Temporada temporada) throws GestorBDEsportsException {
         if (psAfegirTemporada == null) {
             try {
                 psAfegirTemporada = conn.prepareStatement(
@@ -689,11 +896,18 @@ public class CPOracle implements IPersistencia {
 
         try {
             psAfegirTemporada.setInt(1, temporada.getAny());
-            psAfegirTemporada.executeUpdate();
+            int filesAfectades = psAfegirTemporada.executeUpdate();
+            return filesAfectades > 0; // Retorna true si s'ha afegit la temporada
         } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en afegir una temporada", ex);
+            // Comprovar si l'error és perquè ja existeix la temporada
+            if (ex.getSQLState().equals("23505")) { // SQL State 23505 = Unique violation
+                return false; // No afegida perquè ja existeix
+            } else {
+                throw new GestorBDEsportsException("Error en afegir una temporada", ex);
+            }
         }
     }
+
 
     // Mètode per obtenir una temporada
     @Override
@@ -748,7 +962,7 @@ public class CPOracle implements IPersistencia {
 
     // Mètode per eliminar una temporada
     @Override
-    public void eliminarTemporada(int any) throws GestorBDEsportsException {
+    public boolean eliminarTemporada(int any) throws GestorBDEsportsException {
         if (psEliminarTemporada == null) {
             try {
                 psEliminarTemporada = conn.prepareStatement(
@@ -761,11 +975,13 @@ public class CPOracle implements IPersistencia {
 
         try {
             psEliminarTemporada.setInt(1, any);
-            psEliminarTemporada.executeUpdate();
+            int filesAfectades = psEliminarTemporada.executeUpdate();
+            return filesAfectades > 0; // Retorna true si s'ha eliminat la temporada
         } catch (SQLException ex) {
             throw new GestorBDEsportsException("Error en eliminar una temporada", ex);
         }
     }
+
 
     // Nou mètode: obtenirEquipsDeTemporada
     @Override
