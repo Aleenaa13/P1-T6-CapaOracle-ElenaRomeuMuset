@@ -1,9 +1,6 @@
 import capa.CPOracle;
-import p1.t6.model.romeumusetelena.Categoria;
 
-import java.util.List;
-
-public class TestCategories {
+public class TestUsuari {
 
     public static void main(String[] args) {
         CPOracle cp;
@@ -20,9 +17,7 @@ public class TestCategories {
         }
 
         //Proves separades en mètodes
-
-        //provarObtenirCategoria(cp);
-        //provarObtenirTotesCategories(cp);
+        provarValidarUsuari(cp);
 
         // Tancament de la capa
         try {
@@ -33,32 +28,20 @@ public class TestCategories {
             System.out.println("Error en tancar la capa de persistència: " + ex.getMessage());
             infoError(ex);
         }
-    } 
-
-    private static void provarObtenirCategoria(CPOracle cp) {
-        try {
-            int idCategoria = 1; // ID d'exemple
-            Categoria categoria = cp.obtenirCategoria(idCategoria);
-            if (categoria != null) {
-                System.out.println("Categoria obtinguda: " + categoria);
-            } else {
-                System.out.println("No s'ha trobat cap categoria amb l'ID: " + idCategoria);
-            }
-        } catch (Exception ex) {
-            System.out.println("Error en obtenir una categoria: " + ex.getMessage());
-            infoError(ex);
-        }
     }
 
-    private static void provarObtenirTotesCategories(CPOracle cp) {
+    private static void provarValidarUsuari(CPOracle cp) {
         try {
-            List<Categoria> categories = cp.obtenirTotesCategories();
-            System.out.println("Llista de categories obtingudes:");
-            for (Categoria categoria : categories) {
-                System.out.println(categoria);
+            String login = "elena"; // Usuari de prova
+            String contrasenya = "elena"; // Contrasenya de prova
+            boolean resultat = cp.validarUsuari(login, contrasenya);
+            if (resultat) {
+                System.out.println("Usuari validat correctament.");
+            } else {
+                System.out.println("Usuari o contrasenya incorrectes.");
             }
         } catch (Exception ex) {
-            System.out.println("Error en obtenir totes les categories: " + ex.getMessage());
+            System.out.println("Error en validar l'usuari: " + ex.getMessage());
             infoError(ex);
         }
     }

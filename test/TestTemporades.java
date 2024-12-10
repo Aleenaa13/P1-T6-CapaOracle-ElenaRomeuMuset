@@ -39,13 +39,16 @@ public class TestTemporades {
     private static void provarAfegirTemporada(CPOracle cp) {
         try {
             Temporada temporada = new Temporada(2020); // Constructor per afegir
-            cp.afegirTemporada(temporada);
-            System.out.println("Temporada afegida correctament: " + temporada);
+            boolean resultat = cp.afegirTemporada(temporada);
+            if (resultat) {
+                System.out.println("Temporada afegida correctament: " + temporada);
+            } 
         } catch (Exception ex) {
             System.out.println("Error en afegir una temporada: " + ex.getMessage());
             infoError(ex);
         }
     }
+
 
     private static void provarObtenirTemporada(CPOracle cp) {
         try {
@@ -77,10 +80,11 @@ public class TestTemporades {
 
     private static void provarEliminarTemporada(CPOracle cp) {
         try {
-            int idTemporada = 2020; // ID d'exemple per eliminar
-            cp.eliminarTemporada(idTemporada);
-            cp.confirmarCanvis();
-            System.out.println("Temporada eliminada correctament amb ID: " + idTemporada);
+            int anyTemporada = 2020; 
+            boolean resultat = cp.eliminarTemporada(anyTemporada);
+            if (resultat) {
+                System.out.println("Temporada eliminada correctament per l'any: " + anyTemporada);
+            } 
         } catch (Exception ex) {
             System.out.println("Error en eliminar una temporada: " + ex.getMessage());
             infoError(ex);

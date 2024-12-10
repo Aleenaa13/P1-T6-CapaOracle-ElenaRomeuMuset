@@ -22,11 +22,17 @@ public class TestJugadors {
         }
 
         // Proves separades en mètodes
-        provarAfegirJugador(cp);
+        //provarAfegirJugador(cp);
         //provarObtenirJugador(cp);
         //provarObtenirTotsJugadors(cp);
         //provarModificarJugador(cp);
         //provarEliminarJugador(cp);
+        // Proves separades en mètodes
+        provarBuscarPerNIFJugador(cp);
+        //provarBuscarPerDataNaixJugador(cp);
+        //provarBuscarJugadorsOrdenatsPerCognom(cp);
+        //provarBuscarNomJugador(cp);
+
 
         // Tancament de la capa
         try {
@@ -112,7 +118,7 @@ public class TestJugadors {
 
     private static void provarEliminarJugador(CPOracle cp) {
         try {
-            int idJugador = 1; // ID d'exemple per eliminar
+            int idJugador = 104; // ID d'exemple per eliminar
             cp.eliminarJugador(idJugador);
             System.out.println("Jugador eliminat correctament amb ID: " + idJugador);
         } catch (Exception ex) {
@@ -120,6 +126,85 @@ public class TestJugadors {
             infoError(ex);
         }
     }
+    
+    private static void provarBuscarPerNIFJugador(CPOracle cp) {
+    try {
+        String nif = "45678901U"; // Exemple de NIF
+            Jugador jugador = cp.buscarPerNIFJugador(nif); // Assumeix que el mètode retorna un únic jugador
+            if (jugador == null) {
+                System.out.println("No s'ha trobat cap jugador amb el NIF: " + nif);
+            } else {
+                System.out.println("Jugador trobat amb NIF: " + nif);
+                System.out.println(jugador);
+            }
+        } catch (Exception ex) {
+            System.out.println("Error en buscar jugadors pel NIF: " + ex.getMessage());
+            infoError(ex);
+        }
+    }
+
+    private static void provarBuscarPerDataNaixJugador(CPOracle cp) {
+        try {
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(2015, Calendar.JANUARY, 15); // Exemple de data de naixement
+            java.util.Date dataNaix = calendar.getTime();
+
+            // Convertim la data de java.util.Date a java.sql.Date
+            java.sql.Date sqlDataNaix = new java.sql.Date(dataNaix.getTime());
+
+            // Passar la data convertida al mètode
+            List<Jugador> jugadors = cp.buscarPerDataNaixJugador(sqlDataNaix);
+
+            if (jugadors.isEmpty()) {
+                System.out.println("No s'ha trobat cap jugador amb la data de naixement: " + sqlDataNaix);
+            } else {
+                System.out.println("Jugadors trobats amb la data de naixement: " + sqlDataNaix);
+                for (Jugador jugador : jugadors) {
+                    System.out.println(jugador);
+                }
+            }
+        } catch (Exception ex) {
+            System.out.println("Error en buscar jugadors per data de naixement: " + ex.getMessage());
+            infoError(ex);
+        }
+    }
+
+
+    private static void provarBuscarJugadorsOrdenatsPerCognom(CPOracle cp) {
+        try {
+            List<Jugador> jugadors = cp.buscarJugadorsOrdenatsPerCognom(true);
+            if (jugadors.isEmpty()) {
+                System.out.println("No s'han trobat jugadors.");
+            } else {
+                System.out.println("Jugadors trobats ordenats per cognoms:");
+                for (Jugador jugador : jugadors) {
+                    System.out.println(jugador);
+                }
+            }
+        } catch (Exception ex) {
+            System.out.println("Error en buscar jugadors ordenats per cognoms: " + ex.getMessage());
+            infoError(ex);
+        }
+    }
+
+    private static void provarBuscarNomJugador(CPOracle cp) {
+        try {
+            String nom = "Elena"; // Exemple de nom
+            List<Jugador> jugadors = cp.buscarNomJugador(nom);
+            if (jugadors.isEmpty()) {
+                System.out.println("No s'ha trobat cap jugador amb el nom: " + nom);
+            } else {
+                System.out.println("Jugadors trobats amb el nom: " + nom);
+                for (Jugador jugador : jugadors) {
+                    System.out.println(jugador);
+                }
+            }
+        } catch (Exception ex) {
+            System.out.println("Error en buscar jugadors pel nom: " + ex.getMessage());
+            infoError(ex);
+        }
+    }
+
 
     private static void infoError(Throwable aux) {
         do {

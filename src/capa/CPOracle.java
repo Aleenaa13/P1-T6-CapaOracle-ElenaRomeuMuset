@@ -45,20 +45,12 @@ public class CPOracle implements IPersistencia {
     private PreparedStatement psEliminarMembre;
     private PreparedStatement psModificarMembre;
     private PreparedStatement psObtenirMembresDEquip;
-    private PreparedStatement psAfegirCategoria;
     private PreparedStatement psObtenirCategoria;
     private PreparedStatement psObtenirTotesCategories;
-    private PreparedStatement psModificarCategoria;
-    private PreparedStatement psEliminarCategoria;
-    private PreparedStatement psObtenirEquipsDeCategoria;
     private PreparedStatement psAfegirTemporada;
     private PreparedStatement psObtenirTemporada;
     private PreparedStatement psObtenirTotesTemporades;
     private PreparedStatement psEliminarTemporada;
-    private PreparedStatement psObtenirEquipsDeTemporada;
-    private PreparedStatement psAfegirUsuari;
-    private PreparedStatement psObtenirUsuari;
-    private PreparedStatement psEliminarUsuari;
     private PreparedStatement psValidarUsuari;
 
     
@@ -279,12 +271,12 @@ public class CPOracle implements IPersistencia {
     
     // Mètode per buscar jugadors per NIF
     @Override
-    public List<Jugador> buscarPerNIFJugador(String nif) throws GestorBDEsportsException {
+    public Jugador buscarPerNIFJugador(String nif) throws GestorBDEsportsException {
         if (psBuscarPerNIF == null) {
             try {
                 psBuscarPerNIF = conn.prepareStatement(
                     "SELECT id, nom, cognoms, direccio, codipostal, poblacio, foto, anyfirevisiomedica, iban, idlegal, datanaix, sexe " +
-                    "FROM jugador WHERE LOWER(id_legal) LIKE LOWER(?)"
+                    "FROM jugador WHERE LOWER(id_legal) = LOWER(?)" // Comparació exacta del NIF
                 );
             } catch (SQLException ex) {
                 throw new GestorBDEsportsException("Error en preparar la sentència psBuscarPerNIF", ex);
@@ -292,11 +284,10 @@ public class CPOracle implements IPersistencia {
         }
 
         try {
-            psBuscarPerNIF.setString(1, "%" + nif + "%"); // Afegir els percentatges per buscar per coincidència parcial
+            psBuscarPerNIF.setString(1, nif); // Buscar per NIF exactament
             ResultSet rs = psBuscarPerNIF.executeQuery();
 
-            List<Jugador> jugadors = new ArrayList<>();
-            while (rs.next()) {
+            if (rs.next()) { // Comprovem si hem trobat algun jugador
                 // Recuperar els valors de la base de dades
                 int id = rs.getInt("id");
                 String nom = rs.getString("nom");
@@ -314,18 +305,16 @@ public class CPOracle implements IPersistencia {
                 // Crear l'objecte Adreca
                 Adreca adreca = new Adreca(direccio, codiPostal, poblacio);
 
-                // Crear l'objecte Jugador
-                Jugador jugador = new Jugador(id, nom, cognoms, adreca, foto, anyFiRevisioMedica, IBAN, idLegal, dataNaix, sexe);
-
-                // Afegir el jugador a la llista
-                jugadors.add(jugador);
+                // Crear i retornar l'objecte Jugador
+                return new Jugador(id, nom, cognoms, adreca, foto, anyFiRevisioMedica, IBAN, idLegal, dataNaix, sexe);
+            } else {
+                return null; // Si no trobem cap jugador amb aquest NIF, retornem null
             }
-
-            return jugadors;
         } catch (SQLException ex) {
             throw new GestorBDEsportsException("Error en buscar jugadors pel NIF", ex);
         }
     }
+
     
     @Override
     public List<Jugador> buscarPerDataNaixJugador(Date dataNaix) throws GestorBDEsportsException {
@@ -526,7 +515,7 @@ public class CPOracle implements IPersistencia {
     public List<Jugador> obtenirTotsJugadors() throws GestorBDEsportsException {
         if (psObtenirTotsJugadors == null) {
             try {
-                psObtenirTotsJugadors = conn.prepareStatement("SELECT * FROM jugador");
+                psObtenirTotsJugadors = conn.prepareStatement("SELECT * FROM jugador ORDER BY id");
             } catch (SQLException ex) {
                 throw new GestorBDEsportsException("Error en preparar la sentència psObtenirTotsJugadors", ex);
             }
@@ -716,30 +705,6 @@ public class CPOracle implements IPersistencia {
 
     // Mètodes per a la gestió de Categories
 
-    // Mètode per afegir una categoria
-    @Override
-    public void afegirCategoria(Categoria categoria) throws GestorBDEsportsException {
-        if (psAfegirCategoria == null) {
-            try {
-                psAfegirCategoria = conn.prepareStatement(
-                    "INSERT INTO Categoria (nom, edatMin, edatMax) VALUES (?, ?, ?)", 
-                    Statement.RETURN_GENERATED_KEYS
-                );
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psAfegirCategoria", ex);
-            }
-        }
-
-        try {
-            psAfegirCategoria.setString(1, categoria.getNom());
-            psAfegirCategoria.setInt(2, categoria.getEdatMin());
-            psAfegirCategoria.setInt(3, categoria.getEdatMax());
-            psAfegirCategoria.executeUpdate();
-        } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en afegir una categoria", ex);
-        }
-    }
-
     // Mètode per obtenir una categoria
     @Override
     public Categoria obtenirCategoria(int idCategoria) throws GestorBDEsportsException {
@@ -801,84 +766,6 @@ public class CPOracle implements IPersistencia {
         return categories;
     }
 
-    // Mètode per modificar una categoria
-    @Override
-    public void modificarCategoria(Categoria categoria) throws GestorBDEsportsException {
-        if (psModificarCategoria == null) {
-            try {
-                psModificarCategoria = conn.prepareStatement(
-                    "UPDATE Categoria SET nom = ?, edatMin = ?, edatMax = ? WHERE id = ?"
-                );
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psModificarCategoria", ex);
-            }
-        }
-
-        try {
-            psModificarCategoria.setString(1, categoria.getNom());
-            psModificarCategoria.setInt(2, categoria.getEdatMin());
-            psModificarCategoria.setInt(3, categoria.getEdatMax());
-            psModificarCategoria.setInt(4, categoria.getId());
-            psModificarCategoria.executeUpdate();
-        } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en modificar una categoria", ex);
-        }
-    }
-
-    // Mètode per eliminar una categoria
-    @Override
-    public void eliminarCategoria(int idCategoria) throws GestorBDEsportsException {
-        if (psEliminarCategoria == null) {
-            try {
-                psEliminarCategoria = conn.prepareStatement(
-                    "DELETE FROM Categoria WHERE id = ?"
-                );
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psEliminarCategoria", ex);
-            }
-        }
-
-        try {
-            psEliminarCategoria.setInt(1, idCategoria);
-            psEliminarCategoria.executeUpdate();
-        } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en eliminar una categoria", ex);
-        }
-    }
-
-    // Nou mètode: obtenirEquipsDeCategoria
-    @Override
-    public List<Equip> obtenirEquipsDeCategoria(int idCategoria) throws GestorBDEsportsException {
-        if (psObtenirEquipsDeCategoria == null) {
-            try {
-                psObtenirEquipsDeCategoria = conn.prepareStatement(
-                    "SELECT * FROM Equip WHERE id_cat = ?"
-                );
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psObtenirEquipsDeCategoria", ex);
-            }
-        }
-
-        List<Equip> equips = new ArrayList<>();
-        try {
-            psObtenirEquipsDeCategoria.setInt(1, idCategoria);
-            try (ResultSet rs = psObtenirEquipsDeCategoria.executeQuery()) {
-                while (rs.next()) {
-                    equips.add(new Equip(
-                        rs.getString("nom"),
-                        TipusEquip.valueOf(rs.getString("tipus")),
-                        rs.getInt("temporada"),
-                        rs.getInt("id_cat")
-                    ));
-                }
-            }
-        } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en obtenir els equips de la categoria", ex);
-        }
-        return equips;
-    }
-
-
     // Mètodes per a la gestió de Temporades
 
     // Mètode per afegir una temporada
@@ -899,7 +786,6 @@ public class CPOracle implements IPersistencia {
             int filesAfectades = psAfegirTemporada.executeUpdate();
             return filesAfectades > 0; // Retorna true si s'ha afegit la temporada
         } catch (SQLException ex) {
-            // Comprovar si l'error és perquè ja existeix la temporada
             if (ex.getSQLState().equals("23505")) { // SQL State 23505 = Unique violation
                 return false; // No afegida perquè ja existeix
             } else {
@@ -982,117 +868,8 @@ public class CPOracle implements IPersistencia {
         }
     }
 
-
-    // Nou mètode: obtenirEquipsDeTemporada
-    @Override
-    public List<Equip> obtenirEquipsDeTemporada(int anyTemporada) throws GestorBDEsportsException {
-        if (psObtenirEquipsDeTemporada == null) {
-            try {
-                psObtenirEquipsDeTemporada = conn.prepareStatement(
-                    "SELECT * FROM Equip WHERE temporada = ?"
-                );
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psObtenirEquipsDeTemporada", ex);
-            }
-        }
-
-        List<Equip> equips = new ArrayList<>();
-        try {
-            psObtenirEquipsDeTemporada.setInt(1, anyTemporada);
-            try (ResultSet rs = psObtenirEquipsDeTemporada.executeQuery()) {
-                while (rs.next()) {
-                    equips.add(new Equip(
-                        rs.getString("nom"),
-                        TipusEquip.valueOf(rs.getString("tipus")),
-                        rs.getInt("temporada"),
-                        rs.getInt("id_cat")
-                    ));
-                }
-            }
-        } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en obtenir els equips de la temporada", ex);
-        }
-        return equips;
-    }
-
     // Mètodes per a la gestió d'Usuaris
-
-    // Mètode per afegir un usuari
-    @Override
-    public void afegirUsuari(Usuari usuari) throws GestorBDEsportsException {
-        if (psAfegirUsuari == null) {
-            try {
-                psAfegirUsuari = conn.prepareStatement(
-                    "INSERT INTO Usuari (login, nom, password) VALUES (?, ?, ?)"
-                );
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psAfegirUsuari", ex);
-            }
-        }
-
-        try {
-            psAfegirUsuari.setString(1, usuari.getLogin());
-            psAfegirUsuari.setString(2, usuari.getNom());
-            psAfegirUsuari.setString(3, usuari.getPassword());
-            psAfegirUsuari.executeUpdate();
-        } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en afegir un usuari", ex);
-        }
-    }
-
-    // Mètode per obtenir un usuari pel seu login
-    @Override
-    public Usuari obtenirUsuari(String login) throws GestorBDEsportsException {
-        if (psObtenirUsuari == null) {
-            try {
-                psObtenirUsuari = conn.prepareStatement(
-                    "SELECT * FROM Usuari WHERE login = ?"
-                );
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psObtenirUsuari", ex);
-            }
-        }
-
-        try {
-            psObtenirUsuari.setString(1, login);
-            try (ResultSet rs = psObtenirUsuari.executeQuery()) {
-                if (rs.next()) {
-                    return new Usuari(
-                        rs.getString("login"),
-                        rs.getString("nom"),
-                        rs.getString("password")
-                    );
-                } else {
-                    throw new GestorBDEsportsException("Usuari no trobat amb login: " + login);
-                }
-            }
-        } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en obtenir un usuari", ex);
-        }
-    }
-
-    // Mètode per eliminar un usuari
-    @Override
-    public void eliminarUsuari(String login) throws GestorBDEsportsException {
-        if (psEliminarUsuari == null) {
-            try {
-                psEliminarUsuari = conn.prepareStatement(
-                    "DELETE FROM Usuari WHERE login = ?"
-                );
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psEliminarUsuari", ex);
-            }
-        }
-
-        try {
-            psEliminarUsuari.setString(1, login);
-            psEliminarUsuari.executeUpdate();
-        } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en eliminar un usuari", ex);
-        }
-    }
-    
-    //Validació d'usuari
+    // Validació d'usuari
     @Override
     public boolean validarUsuari(String login, String contrasenya) throws GestorBDEsportsException {
         if (psValidarUsuari == null) {
