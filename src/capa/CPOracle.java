@@ -617,14 +617,21 @@ public class CPOracle implements IPersistencia {
         }
 
         try {
-            psAfegirMembre.setInt(1, membre.getEquip());
-            psAfegirMembre.setInt(2, membre.getJugador());
-            psAfegirMembre.setString(3, membre.getTipus().name());
+            // Obtenim l'ID del jugador
+            int idJugador = membre.getJugador().getId(); // Assumint que 'getId()' retorna l'ID del jugador
+
+            // Inserim les dades del membre
+            psAfegirMembre.setInt(1, membre.getEquip());  // ID de l'equip
+            psAfegirMembre.setInt(2, idJugador);          // ID del jugador
+            psAfegirMembre.setString(3, membre.getTipus().name()); // Tipus de membre (Titular/Convidat)
+
+            // Executem la inserció
             psAfegirMembre.executeUpdate();
         } catch (SQLException ex) {
             throw new GestorBDEsportsException("Error en afegir un membre a l'equip", ex);
         }
     }
+
 
     // Mètode per eliminar un membre
     @Override
@@ -640,44 +647,29 @@ public class CPOracle implements IPersistencia {
         }
 
         try {
-            psEliminarMembre.setInt(1, membre.getEquip());
-            psEliminarMembre.setInt(2, membre.getJugador());
+            // Obtenim l'ID del jugador
+            int idJugador = membre.getJugador().getId(); // Assumint que 'getId()' retorna l'ID del jugador
+
+            // Eliminem el membre de l'equip
+            psEliminarMembre.setInt(1, membre.getEquip());  // ID de l'equip
+            psEliminarMembre.setInt(2, idJugador);          // ID del jugador
+
+            // Executem l'eliminació
             psEliminarMembre.executeUpdate();
         } catch (SQLException ex) {
             throw new GestorBDEsportsException("Error en eliminar un membre de l'equip", ex);
         }
     }
 
-    // Mètode per modificar un membre
-    @Override
-    public void modificarMembre(Membre membre) throws GestorBDEsportsException {
-        if (psModificarMembre == null) {
-            try {
-                psModificarMembre = conn.prepareStatement(
-                    "UPDATE Membre SET tipus = ? WHERE equip = ? AND jugador = ?"
-                );
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psModificarMembre", ex);
-            }
-        }
-
-        try {
-            psModificarMembre.setString(1, membre.getTipus().name());
-            psModificarMembre.setInt(2, membre.getEquip());
-            psModificarMembre.setInt(3, membre.getJugador());
-            psModificarMembre.executeUpdate();
-        } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en modificar un membre de l'equip", ex);
-        }
-    }
-
     // Mètode per obtenir els membres d'un equip
     @Override
-    public List<Membre> obtenirMembresDEquip(int idEquip) throws GestorBDEsportsException {
+    public List<Membre> obtenirMembresDEquip(int idEquip) throws GestorBDEsportsException { 
         if (psObtenirMembresDEquip == null) {
             try {
                 psObtenirMembresDEquip = conn.prepareStatement(
-                    "SELECT * FROM Membre WHERE equip = ?"
+                    "SELECT m.IDJUGADOR, m.IDEQUIP, m.TITULAR_CONVIDAT " +
+                    "FROM Membre m " +
+                    "WHERE m.IDEQUIP = ?"
                 );
             } catch (SQLException ex) {
                 throw new GestorBDEsportsException("Error en preparar la sentència psObtenirMembresDEquip", ex);
@@ -689,10 +681,17 @@ public class CPOracle implements IPersistencia {
             psObtenirMembresDEquip.setInt(1, idEquip);
             try (ResultSet rs = psObtenirMembresDEquip.executeQuery()) {
                 while (rs.next()) {
+                    // Obtenim el jugador amb el mètode obtenirJugador
+                    Jugador jugador = obtenirJugador(rs.getInt("IDJUGADOR"));
+
+                    // Assignem el tipus de membre (Titular o Convidat)
+                    TipusMembre tipus = TipusMembre.valueOf(rs.getString("TITULAR_CONVIDAT"));
+
+                    // Creem el Membre amb l'ID de l'equip, el Jugador i el tipus de membre
                     membres.add(new Membre(
-                        rs.getInt("equip"),
-                        rs.getInt("jugador"),
-                        TipusMembre.valueOf(rs.getString("tipus"))
+                        rs.getInt("IDEQUIP"),  // IDEQUIP
+                        jugador,                // Jugador
+                        tipus                   // Tipus de membre (Titular o Convidat)
                     ));
                 }
             }
@@ -701,7 +700,6 @@ public class CPOracle implements IPersistencia {
         }
         return membres;
     }
-
 
     // Mètodes per a la gestió de Categories
 
