@@ -271,49 +271,51 @@ public class CPOracle implements IPersistencia {
     
     // Mètode per buscar jugadors per NIF
     @Override
-    public Jugador buscarPerNIFJugador(String nif) throws GestorBDEsportsException {
-        if (psBuscarPerNIF == null) {
-            try {
-                psBuscarPerNIF = conn.prepareStatement(
-                    "SELECT id, nom, cognoms, direccio, codipostal, poblacio, foto, anyfirevisiomedica, iban, idlegal, datanaix, sexe " +
-                    "FROM jugador WHERE LOWER(id_legal) = LOWER(?)" // Comparació exacta del NIF
-                );
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psBuscarPerNIF", ex);
-            }
-        }
-
+    public List<Jugador> buscarPerNIFJugador(String nif) throws GestorBDEsportsException {
+    if (psBuscarPerNIF == null) {
         try {
-            psBuscarPerNIF.setString(1, nif); // Buscar per NIF exactament
-            ResultSet rs = psBuscarPerNIF.executeQuery();
-
-            if (rs.next()) { // Comprovem si hem trobat algun jugador
-                // Recuperar els valors de la base de dades
-                int id = rs.getInt("id");
-                String nom = rs.getString("nom");
-                String cognoms = rs.getString("cognoms");
-                String direccio = rs.getString("direccio");
-                String codiPostal = rs.getString("codipostal");
-                String poblacio = rs.getString("poblacio");
-                String foto = rs.getString("foto");
-                int anyFiRevisioMedica = rs.getInt("anyfirevisiomedica");
-                String IBAN = rs.getString("iban");
-                String idLegal = rs.getString("idlegal");
-                Date dataNaix = rs.getDate("datanaix");
-                char sexe = rs.getString("sexe").charAt(0);
-
-                // Crear l'objecte Adreca
-                Adreca adreca = new Adreca(direccio, codiPostal, poblacio);
-
-                // Crear i retornar l'objecte Jugador
-                return new Jugador(id, nom, cognoms, adreca, foto, anyFiRevisioMedica, IBAN, idLegal, dataNaix, sexe);
-            } else {
-                return null; // Si no trobem cap jugador amb aquest NIF, retornem null
-            }
+            psBuscarPerNIF = conn.prepareStatement(
+                "SELECT id, nom, cognoms, direccio, codipostal, poblacio, foto, anyfirevisiomedica, iban, idlegal, datanaix, sexe " +
+                "FROM jugador WHERE LOWER(id_legal) = LOWER(?)" // Comparació exacta del NIF
+            );
         } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en buscar jugadors pel NIF", ex);
+            throw new GestorBDEsportsException("Error en preparar la sentència psBuscarPerNIF", ex);
         }
     }
+
+    List<Jugador> jugadors = new ArrayList<>();
+
+    try {
+        psBuscarPerNIF.setString(1, nif); // Buscar per NIF exactament
+        ResultSet rs = psBuscarPerNIF.executeQuery();
+
+        while (rs.next()) { // Recorrem tots els resultats
+            // Recuperar els valors de la base de dades
+            int id = rs.getInt("id");
+            String nom = rs.getString("nom");
+            String cognoms = rs.getString("cognoms");
+            String direccio = rs.getString("direccio");
+            String codiPostal = rs.getString("codipostal");
+            String poblacio = rs.getString("poblacio");
+            String foto = rs.getString("foto");
+            int anyFiRevisioMedica = rs.getInt("anyfirevisiomedica");
+            String IBAN = rs.getString("iban");
+            String idLegal = rs.getString("idlegal");
+            Date dataNaix = rs.getDate("datanaix");
+            char sexe = rs.getString("sexe").charAt(0);
+
+            // Crear l'objecte Adreca
+            Adreca adreca = new Adreca(direccio, codiPostal, poblacio);
+
+            // Crear l'objecte Jugador i afegir-lo a la llista
+            jugadors.add(new Jugador(id, nom, cognoms, adreca, foto, anyFiRevisioMedica, IBAN, idLegal, dataNaix, sexe));
+        }
+    } catch (SQLException ex) {
+        throw new GestorBDEsportsException("Error en buscar jugadors pel NIF", ex);
+    }
+
+    return jugadors; // Retornar la llista de jugadors
+}
 
     
     @Override

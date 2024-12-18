@@ -128,20 +128,23 @@ public class TestJugadors {
     }
     
     private static void provarBuscarPerNIFJugador(CPOracle cp) {
-    try {
-        String nif = "45678901U"; // Exemple de NIF
-            Jugador jugador = cp.buscarPerNIFJugador(nif); // Assumeix que el mètode retorna un únic jugador
-            if (jugador == null) {
+        try {
+            String nif = "45678901U"; // Exemple de NIF
+            List<Jugador> jugadors = cp.buscarPerNIFJugador(nif); // Assumeix que el mètode retorna una llista de jugadors
+            if (jugadors == null || jugadors.isEmpty()) {
                 System.out.println("No s'ha trobat cap jugador amb el NIF: " + nif);
             } else {
-                System.out.println("Jugador trobat amb NIF: " + nif);
-                System.out.println(jugador);
+                System.out.println("Jugadors trobats amb NIF: " + nif);
+                for (Jugador jugador : jugadors) {
+                    System.out.println(jugador);
+                }
             }
         } catch (Exception ex) {
             System.out.println("Error en buscar jugadors pel NIF: " + ex.getMessage());
             infoError(ex);
         }
     }
+
 
     private static void provarBuscarPerDataNaixJugador(CPOracle cp) {
         try {
