@@ -7,8 +7,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
@@ -22,7 +22,6 @@ import p1.t6.model.romeumusetelena.Membre;
 import p1.t6.model.romeumusetelena.Temporada;
 import p1.t6.model.romeumusetelena.TipusEquip;
 import p1.t6.model.romeumusetelena.TipusMembre;
-import p1.t6.model.romeumusetelena.Usuari;
 
 public class CPOracle implements IPersistencia {
     private Connection conn;
@@ -30,9 +29,11 @@ public class CPOracle implements IPersistencia {
     private PreparedStatement psAfegirEquip;
     private PreparedStatement psObtenirEquip;
     private PreparedStatement psObtenirTotsEquips;
+    private PreparedStatement psExisteixEquipEnTemporada;
     private PreparedStatement psModificarEquip;
     private PreparedStatement psEliminarEquip;
     private PreparedStatement psAfegirJugador;
+    private PreparedStatement psEquipTeMembres;
     private PreparedStatement psBuscarNomJugador;
     private PreparedStatement psBuscarPerNIF;
     private PreparedStatement psBuscarPerDataNaix;
@@ -43,7 +44,6 @@ public class CPOracle implements IPersistencia {
     private PreparedStatement psEliminarJugador;
     private PreparedStatement psAfegirMembre;
     private PreparedStatement psEliminarMembre;
-    private PreparedStatement psModificarMembre;
     private PreparedStatement psObtenirMembresDEquip;
     private PreparedStatement psObtenirCategoria;
     private PreparedStatement psObtenirTotesCategories;
@@ -52,7 +52,8 @@ public class CPOracle implements IPersistencia {
     private PreparedStatement psObtenirTotesTemporades;
     private PreparedStatement psEliminarTemporada;
     private PreparedStatement psValidarUsuari;
-
+    
+    //faig alguns prepared statements dins del try ja que sinó em causavn problemes. 
     
     // Constructor per establir la connexió amb Oracle
     public CPOracle() throws GestorBDEsportsException {
@@ -95,31 +96,34 @@ public class CPOracle implements IPersistencia {
         }
     }
 
-
     // Mètode per afegir un nou Equip
     @Override
     public boolean afegirEquip(Equip equip) throws GestorBDEsportsException {
-        if (psAfegirEquip == null) {
-            try {
-                // Preparar la sentència per inserir un equip
-                psAfegirEquip = conn.prepareStatement("INSERT INTO equip (nom, tipus, anytemporada, idcategoria) VALUES (?, ?, ?, ?)");
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psAfegirEquip", ex);
-            }
-        }
-
         try {
+            // Verificar si ya existe un equipo con el mismo nombre en la misma temporada
+            if (existeixEquipEnTemporada(equip.getNom(), equip.getAnyTemporada(), null)) {
+                throw new GestorBDEsportsException("Ja existeix un equip amb el nom '" + 
+                    equip.getNom() + "' en la temporada " + equip.getAnyTemporada());
+            }
+
+            if (psAfegirEquip == null) {
+                psAfegirEquip = conn.prepareStatement(
+                    "INSERT INTO equip (nom, tipus, anytemporada, idcategoria) VALUES (?, ?, ?, ?)"
+                );
+            }
+
             psAfegirEquip.setString(1, equip.getNom());
             psAfegirEquip.setString(2, equip.getTipus().name());
             psAfegirEquip.setInt(3, equip.getAnyTemporada());
             psAfegirEquip.setInt(4, equip.getIdCategoria());
 
             int rowsAffected = psAfegirEquip.executeUpdate();
-            return rowsAffected > 0; // Si es va afegir correctament, es retornarà true
+            return rowsAffected > 0;
         } catch (SQLException ex) {
             throw new GestorBDEsportsException("Error en afegir l'equip", ex);
         }
     }
+
 
     // Mètode per obtenir un equip per ID
     @Override
@@ -151,6 +155,36 @@ public class CPOracle implements IPersistencia {
             throw new GestorBDEsportsException("Error en obtenir l'equip", ex);
         }
     }
+    
+    // Això és un metode auxiliar
+    public boolean existeixEquipEnTemporada(String nom, int anyTemporada, Integer idExclos) throws GestorBDEsportsException {
+        try {
+            if (psExisteixEquipEnTemporada == null) {
+                String sql = "SELECT COUNT(*) FROM equip WHERE LOWER(nom) = LOWER(?) AND anytemporada = ?";
+                if (idExclos != null) {
+                    sql += " AND id != ?";
+                }
+                psExisteixEquipEnTemporada = conn.prepareStatement(sql);
+            }
+
+            psExisteixEquipEnTemporada.setString(1, nom);
+            psExisteixEquipEnTemporada.setInt(2, anyTemporada);
+
+            if (idExclos != null) {
+                psExisteixEquipEnTemporada.setInt(3, idExclos);
+            }
+
+            ResultSet rs = psExisteixEquipEnTemporada.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            } else {
+                return false; 
+            }
+        } catch (SQLException ex) {
+            throw new GestorBDEsportsException("Error en comprovar si existeix l'equip en la temporada", ex);
+        }
+    }
+
 
     // Mètode per obtenir tots els equips
     @Override
@@ -187,50 +221,78 @@ public class CPOracle implements IPersistencia {
     // Mètode per modificar un equip existent
     @Override
     public void modificarEquip(Equip equip) throws GestorBDEsportsException {
-        if (psModificarEquip == null) {
-            try {
-                // Preparar la sentència per modificar un equip
-                psModificarEquip = conn.prepareStatement("UPDATE equip SET nom = ?, tipus = ?, anytemporada = ?, idcategoria = ? WHERE id = ?");
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psModificarEquip", ex);
-            }
-        }
-
         try {
-            // Establir els valors per a la sentència preparada
+            // Verificar si ya existe otro equipo con el mismo nombre en la misma temporada
+            if (existeixEquipEnTemporada(equip.getNom(), equip.getAnyTemporada(), equip.getId())) {
+                throw new GestorBDEsportsException("Ja existeix un altre equip amb el nom '" + 
+                    equip.getNom() + "' en la temporada " + equip.getAnyTemporada());
+            }
+
+            if (psModificarEquip == null) {
+                psModificarEquip = conn.prepareStatement(
+                    "UPDATE equip SET nom = ?, tipus = ?, anytemporada = ?, idcategoria = ? WHERE id = ?"
+                );
+            }
+
             psModificarEquip.setString(1, equip.getNom());
             psModificarEquip.setString(2, equip.getTipus().name());
             psModificarEquip.setInt(3, equip.getAnyTemporada());
             psModificarEquip.setInt(4, equip.getIdCategoria());
-            psModificarEquip.setInt(5, equip.getId()); // Afegir l'ID per identificar quin equip modificar
+            psModificarEquip.setInt(5, equip.getId());
 
-            // Executar la sentència
-            if(psModificarEquip.executeUpdate()<1){
+            if (psModificarEquip.executeUpdate() < 1) {
                 throw new GestorBDEsportsException("No s'ha pogut modificar res");
             }
         } catch (SQLException ex) {
             throw new GestorBDEsportsException("Error en modificar l'equip", ex);
         }
     }
+    
+    
+    @Override
+    public boolean equipTeMembres(int idEquip) throws SQLException  {
+        try {
+            // Inicialitzar el PreparedStatement només la primera vegada
+            if (psEquipTeMembres == null) {
+                String sql = "SELECT COUNT(*) FROM membre WHERE idequip = ?";
+                psEquipTeMembres = conn.prepareStatement(sql);
+            }
+
+            psEquipTeMembres.setInt(1, idEquip);
+
+            ResultSet rs = psEquipTeMembres.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            } else {
+                return false; // Si no hi ha resultat, retornem false
+            }
+        } catch (SQLException ex) {
+            throw new SQLException("Error en comprovar si l'equip té membres", ex);
+        }
+    }
 
     // Mètode per eliminar un equip
     @Override
     public void eliminarEquip(int idEquip) throws GestorBDEsportsException {
-        if (psEliminarEquip == null) {
-            try {
-                // Preparar la sentència per eliminar un equip per ID
-                psEliminarEquip = conn.prepareStatement("DELETE FROM equip WHERE id = ?");
-            } catch (SQLException ex) {
-                throw new GestorBDEsportsException("Error en preparar la sentència psEliminarEquip", ex);
-            }
-        }
-
         try {
-            // Establir l'ID per a la sentència preparada
-            psEliminarEquip.setInt(1, idEquip);
+            boolean teMembres = equipTeMembres(idEquip);
+            
+            if (teMembres) {
+                
+                String sqlEliminarMembres = "DELETE FROM membre WHERE idequip = ?";
+                try (PreparedStatement ps = conn.prepareStatement(sqlEliminarMembres)) {
+                    ps.setInt(1, idEquip);
+                    ps.executeUpdate();
+                }
+            }
 
-            // Executar la sentència
+            if (psEliminarEquip == null) {
+                psEliminarEquip = conn.prepareStatement("DELETE FROM equip WHERE id = ?");
+            }
+
+            psEliminarEquip.setInt(1, idEquip);
             psEliminarEquip.executeUpdate();
+            
         } catch (SQLException ex) {
             throw new GestorBDEsportsException("Error en eliminar l'equip", ex);
         }
@@ -272,50 +334,50 @@ public class CPOracle implements IPersistencia {
     // Mètode per buscar jugadors per NIF
     @Override
     public List<Jugador> buscarPerNIFJugador(String nif) throws GestorBDEsportsException {
-    if (psBuscarPerNIF == null) {
+        if (psBuscarPerNIF == null) {
+            try {
+                psBuscarPerNIF = conn.prepareStatement(
+                    "SELECT id, nom, cognoms, direccio, codipostal, poblacio, foto, anyfirevisiomedica, iban, idlegal, datanaix, sexe " +
+                    "FROM jugador WHERE LOWER(id_legal) = LOWER(?)" // Comparació exacta del NIF
+                );
+            } catch (SQLException ex) {
+                throw new GestorBDEsportsException("Error en preparar la sentència psBuscarPerNIF", ex);
+            }
+        }
+
+        List<Jugador> jugadors = new ArrayList<>();
+
         try {
-            psBuscarPerNIF = conn.prepareStatement(
-                "SELECT id, nom, cognoms, direccio, codipostal, poblacio, foto, anyfirevisiomedica, iban, idlegal, datanaix, sexe " +
-                "FROM jugador WHERE LOWER(id_legal) = LOWER(?)" // Comparació exacta del NIF
-            );
+            psBuscarPerNIF.setString(1, nif); // Buscar per NIF exactament
+            ResultSet rs = psBuscarPerNIF.executeQuery();
+
+            while (rs.next()) { // Recorrem tots els resultats
+                // Recuperar els valors de la base de dades
+                int id = rs.getInt("id");
+                String nom = rs.getString("nom");
+                String cognoms = rs.getString("cognoms");
+                String direccio = rs.getString("direccio");
+                String codiPostal = rs.getString("codipostal");
+                String poblacio = rs.getString("poblacio");
+                String foto = rs.getString("foto");
+                int anyFiRevisioMedica = rs.getInt("anyfirevisiomedica");
+                String IBAN = rs.getString("iban");
+                String idLegal = rs.getString("idlegal");
+                Date dataNaix = rs.getDate("datanaix");
+                char sexe = rs.getString("sexe").charAt(0);
+
+                // Crear l'objecte Adreca
+                Adreca adreca = new Adreca(direccio, codiPostal, poblacio);
+
+                // Crear l'objecte Jugador i afegir-lo a la llista
+                jugadors.add(new Jugador(id, nom, cognoms, adreca, foto, anyFiRevisioMedica, IBAN, idLegal, dataNaix, sexe));
+            }
         } catch (SQLException ex) {
-            throw new GestorBDEsportsException("Error en preparar la sentència psBuscarPerNIF", ex);
+            throw new GestorBDEsportsException("Error en buscar jugadors pel NIF", ex);
         }
+
+        return jugadors; 
     }
-
-    List<Jugador> jugadors = new ArrayList<>();
-
-    try {
-        psBuscarPerNIF.setString(1, nif); // Buscar per NIF exactament
-        ResultSet rs = psBuscarPerNIF.executeQuery();
-
-        while (rs.next()) { // Recorrem tots els resultats
-            // Recuperar els valors de la base de dades
-            int id = rs.getInt("id");
-            String nom = rs.getString("nom");
-            String cognoms = rs.getString("cognoms");
-            String direccio = rs.getString("direccio");
-            String codiPostal = rs.getString("codipostal");
-            String poblacio = rs.getString("poblacio");
-            String foto = rs.getString("foto");
-            int anyFiRevisioMedica = rs.getInt("anyfirevisiomedica");
-            String IBAN = rs.getString("iban");
-            String idLegal = rs.getString("idlegal");
-            Date dataNaix = rs.getDate("datanaix");
-            char sexe = rs.getString("sexe").charAt(0);
-
-            // Crear l'objecte Adreca
-            Adreca adreca = new Adreca(direccio, codiPostal, poblacio);
-
-            // Crear l'objecte Jugador i afegir-lo a la llista
-            jugadors.add(new Jugador(id, nom, cognoms, adreca, foto, anyFiRevisioMedica, IBAN, idLegal, dataNaix, sexe));
-        }
-    } catch (SQLException ex) {
-        throw new GestorBDEsportsException("Error en buscar jugadors pel NIF", ex);
-    }
-
-    return jugadors; // Retornar la llista de jugadors
-}
 
     
     @Override
@@ -550,14 +612,36 @@ public class CPOracle implements IPersistencia {
         }
         return jugadors;
     }
+    
+    
 
     // Mètode per modificar un jugador
     @Override
     public void modificarJugador(Jugador jugador) throws GestorBDEsportsException {
+        // Primero obtenemos el jugador actual para comparar los cambios
+        Jugador jugadorActual = obtenirJugador(jugador.getId());
+        
+        // Validar cambio de sexo si es necesario
+        if (jugadorActual.getSexe() != jugador.getSexe()) {
+            if (!esPermesCanviarSexe(jugador.getId())) {
+                throw new GestorBDEsportsException("No es pot canviar el sexe del jugador perquè pertany a un equip no mixt");
+            }
+        }
+        
+        // Validar cambio de fecha de nacimiento si es necesario
+        if (!jugadorActual.getDataNaix().equals(jugador.getDataNaix())) {
+            if (!esPermesCanviarDataNaixement(jugador.getId(), jugador.getDataNaix())) {
+                throw new GestorBDEsportsException("No es pot canviar la data de naixement perquè afectaria la categoria del jugador");
+            }
+        }
+        
+        // Si las validaciones pasan, procedemos con la modificación
         if (psModificarJugador == null) {
             try {
                 psModificarJugador = conn.prepareStatement(
-                    "UPDATE jugador SET nom = ?, cognoms = ?, direccio = ?, codiPostal = ?, poblacio = ?, foto = ?, anyFiRevisioMedica = ?, IBAN = ?, idLegal = ?, dataNaix = ?, sexe = ? WHERE id = ?"
+                    "UPDATE jugador SET nom = ?, cognoms = ?, direccio = ?, codiPostal = ?, " +
+                    "poblacio = ?, foto = ?, anyFiRevisioMedica = ?, IBAN = ?, idLegal = ?, " +
+                    "dataNaix = ?, sexe = ? WHERE id = ?"
                 );
             } catch (SQLException ex) {
                 throw new GestorBDEsportsException("Error en preparar la sentència psModificarJugador", ex);
@@ -578,9 +662,87 @@ public class CPOracle implements IPersistencia {
             psModificarJugador.setString(11, String.valueOf(jugador.getSexe()));
             psModificarJugador.setInt(12, jugador.getId());
 
-            psModificarJugador.executeUpdate();
+            if (psModificarJugador.executeUpdate() < 1) {
+                throw new GestorBDEsportsException("No s'ha pogut modificar res");
+            }
         } catch (SQLException ex) {
             throw new GestorBDEsportsException("Error en modificar el jugador", ex);
+        }
+    }
+    
+    //Mira si pot canviar el sexe d'un jugador
+    @Override
+    public boolean esPermesCanviarSexe(int idJugador) throws GestorBDEsportsException {
+        String sql = "SELECT e.tipus " +
+                     "FROM Membre m " +
+                     "JOIN Equip e ON m.idequip = e.id " +
+                     "WHERE m.idjugador = ?";
+                     
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idJugador);
+            ResultSet rs = ps.executeQuery();
+            
+            while (rs.next()) {
+                String tipusEquip = rs.getString("tipus");
+                // Si el jugador pertenece a un equipo que no es mixto (M), no se puede cambiar el sexo
+                if (!tipusEquip.equals("M")) {
+                    return false;
+                }
+            }
+            
+            // Si no pertenece a ningún equipo o solo pertenece a equipos mixtos, se puede cambiar
+            return true;
+            
+        } catch (SQLException ex) {
+            throw new GestorBDEsportsException("Error al verificar si se puede cambiar el sexo del jugador", ex);
+        }
+    }
+    
+    //Mira si es pot camviar la data de naixament d'un jugador
+    @Override
+    public boolean esPermesCanviarDataNaixement(int idJugador, Date novaData) throws GestorBDEsportsException {
+        String sql = "SELECT DISTINCT c.edatMin, c.edatMax, e.anytemporada " +
+                     "FROM Membre m " +
+                     "JOIN Equip e ON m.idequip = e.id " +
+                     "JOIN Categoria c ON e.idcategoria = c.id " +
+                     "WHERE m.idjugador = ?";
+                     
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idJugador);
+            ResultSet rs = ps.executeQuery();
+            
+            while (rs.next()) {
+                int edatMin = rs.getInt("edatMin");
+                int edatMax = rs.getInt("edatMax");
+                int anyTemporada = rs.getInt("anytemporada");
+                
+                // Calcular la edad que tendría el jugador en la temporada con la nueva fecha
+                Calendar calTemporada = Calendar.getInstance();
+                Calendar calNaixement = Calendar.getInstance();
+                
+                calTemporada.set(Calendar.YEAR, anyTemporada);
+                calNaixement.setTime(novaData);
+                
+                int edat = calTemporada.get(Calendar.YEAR) - calNaixement.get(Calendar.YEAR);
+                
+                // Ajustar la edad si aún no ha cumplido años en la temporada
+                if (calNaixement.get(Calendar.MONTH) > calTemporada.get(Calendar.MONTH) || 
+                    (calNaixement.get(Calendar.MONTH) == calTemporada.get(Calendar.MONTH) && 
+                     calNaixement.get(Calendar.DAY_OF_MONTH) > calTemporada.get(Calendar.DAY_OF_MONTH))) {
+                    edat--;
+                }
+                
+                // Verificar si la nueva edad estaría fuera del rango de la categoría
+                if (edat < edatMin || edat > edatMax) {
+                    return false; // La nueva fecha afectaría a la categoría
+                }
+            }
+            
+            // Si no se encontró ningún conflicto con las categorías o el jugador no está en ningún equipo
+            return true;
+            
+        } catch (SQLException ex) {
+            throw new GestorBDEsportsException("Error al verificar si es pot canviar la data de naixement del jugador", ex);
         }
     }
 
@@ -608,10 +770,25 @@ public class CPOracle implements IPersistencia {
     // Mètode per afegir un membre
     @Override
     public void afegirMembre(Membre membre) throws GestorBDEsportsException {
+        // Primero verificamos si el jugador ya es titular en otro equipo
+        if (membre.getTipus() == TipusMembre.TITULAR) {
+            String sqlVerificarTitular = "SELECT COUNT(*) FROM Membre WHERE idjugador = ? AND titular_convidat = 'T'";
+            try (PreparedStatement psVerificarTitular = conn.prepareStatement(sqlVerificarTitular)) {
+                psVerificarTitular.setInt(1, membre.getJugador().getId());
+                ResultSet rs = psVerificarTitular.executeQuery();
+                if (rs.next() && rs.getInt(1) > 0) {
+                    throw new GestorBDEsportsException("El jugador ya es titular en otro equipo");
+                }
+            } catch (SQLException ex) {
+                throw new GestorBDEsportsException("Error al verificar si el jugador es titular", ex);
+            }
+        }
+
+        // Si llegamos aquí, podemos proceder con la inserción
         if (psAfegirMembre == null) {
             try {
                 psAfegirMembre = conn.prepareStatement(
-                    "INSERT INTO Membre (equip, jugador, tipus) VALUES (?, ?, ?)"
+                    "INSERT INTO Membre (idequip, idjugador, titular_convidat) VALUES (?, ?, ?)"
                 );
             } catch (SQLException ex) {
                 throw new GestorBDEsportsException("Error en preparar la sentència psAfegirMembre", ex);
@@ -620,12 +797,12 @@ public class CPOracle implements IPersistencia {
 
         try {
             // Obtenim l'ID del jugador
-            int idJugador = membre.getJugador().getId(); // Assumint que 'getId()' retorna l'ID del jugador
+            int idJugador = membre.getJugador().getId();
 
             // Inserim les dades del membre
-            psAfegirMembre.setInt(1, membre.getEquip());  // ID de l'equip
-            psAfegirMembre.setInt(2, idJugador);          // ID del jugador
-            psAfegirMembre.setString(3, membre.getTipus().name()); // Tipus de membre (Titular/Convidat)
+            psAfegirMembre.setInt(1, membre.getEquip());
+            psAfegirMembre.setInt(2, idJugador);
+            psAfegirMembre.setString(3, membre.getTipus().name().substring(0, 1)); // Convertimos TITULAR->T, CONVIDAT->C
 
             // Executem la inserció
             psAfegirMembre.executeUpdate();
@@ -641,7 +818,7 @@ public class CPOracle implements IPersistencia {
         if (psEliminarMembre == null) {
             try {
                 psEliminarMembre = conn.prepareStatement(
-                    "DELETE FROM Membre WHERE equip = ? AND jugador = ?"
+                    "DELETE FROM Membre WHERE idequip = ? AND idjugador = ?"
                 );
             } catch (SQLException ex) {
                 throw new GestorBDEsportsException("Error en preparar la sentència psEliminarMembre", ex);
@@ -686,14 +863,22 @@ public class CPOracle implements IPersistencia {
                     // Obtenim el jugador amb el mètode obtenirJugador
                     Jugador jugador = obtenirJugador(rs.getInt("IDJUGADOR"));
 
-                    // Assignem el tipus de membre (Titular o Convidat)
-                    TipusMembre tipus = TipusMembre.valueOf(rs.getString("TITULAR_CONVIDAT"));
+                    // Convertir el valor de la base de datos (T/C) al enum TipusMembre
+                    String tipusDB = rs.getString("TITULAR_CONVIDAT");
+                    TipusMembre tipus;
+                    if ("T".equals(tipusDB)) {
+                        tipus = TipusMembre.TITULAR;
+                    } else if ("C".equals(tipusDB)) {
+                        tipus = TipusMembre.CONVIDAT;
+                    } else {
+                        throw new GestorBDEsportsException("Tipus de membre no vàlid: " + tipusDB);
+                    }
 
                     // Creem el Membre amb l'ID de l'equip, el Jugador i el tipus de membre
                     membres.add(new Membre(
-                        rs.getInt("IDEQUIP"),  // IDEQUIP
-                        jugador,                // Jugador
-                        tipus                   // Tipus de membre (Titular o Convidat)
+                        rs.getInt("IDEQUIP"),
+                        jugador,
+                        tipus
                     ));
                 }
             }
